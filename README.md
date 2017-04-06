@@ -3,15 +3,15 @@
 
 
 # Modificacion del paquete arp-scan
-# Se ha añadido la opcion G i o --grx=i, donde i es un entero entre 1 y 255
-# Cuando usamos arp-scan para buscar un listado de host, tenemos la opcion de asignar ip_source = ip_dest
-# con -arpspa=dest, pero en los router de la Diputacion de Granada no funciona esta opcion.
-# Esta opcion implementada toma el valor de una ip_dest y crea un ip_source con la terminacion <i>.
-# Ejem.  Tenemos un archivo llamado "listado" con las ip que queremos buscar que contiene 192.168.1.1 y 10.100.1.254
-# cat listado| sudo arp-scan --file=- -x -q --grx=55
-# Esto buscará la ip_dest=192.168.1.1 con ip_source=192.168.1.55 y la ip_dest=10.100.1.254 con ip_source=10.100.1.55
-# Nuestro caso lo usamos para buscar en que red nos encontramos de la wan de la Diputacion, conseguimos autoconfigurar el puesto de red en menos de 2 segundos
-# buscando en 180 subredes
+ Se ha añadido la opcion G i o --grx=i, donde i es un entero entre 1 y 255
+ Cuando usamos arp-scan para buscar un listado de host, tenemos la opcion de asignar ip_source = ip_dest
+ con -arpspa=dest, pero en los router de la Diputacion de Granada no funciona esta opcion.
+ Esta opcion implementada toma el valor de una ip_dest y crea un ip_source con la terminacion <i>.
+ Ejem.  Tenemos un archivo llamado "listado" con las ip que queremos buscar que contiene 192.168.1.1 y 10.100.1.254
+ cat listado| sudo arp-scan --file=- -x -q --grx=55
+ Esto buscará la ip_dest=192.168.1.1 con ip_source=192.168.1.55 y la ip_dest=10.100.1.254 con ip_source=10.100.1.55
+ Nuestro caso lo usamos para buscar en que red nos encontramos de la wan de la Diputacion, conseguimos autoconfigurar el puesto de red en menos de 2 segundos
+ buscando en 180 subredes
 
 # arp-scan
 
