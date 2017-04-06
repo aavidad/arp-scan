@@ -1,105 +1,109 @@
 /*
- * The ARP Scanner (arp-scan) is Copyright (C) 2005-2016 Roy Hills,
+ * El paquete ARP Scanner (arp-scan) tiene Copyright (C) 2005-2016 Roy Hills,
  * NTA Monitor Ltd.
+ * Modificado por Alberto Avidad Fernandez, para la distro GrX
+ * Oficina de Software libre de la Diputacion de Granada
+ * Este programa es software libre: se puede redistribuir y / o modificar
+ * bajo los términos de la Licencia Pública General de GNU publicada por
+ * La Free Software Foundation, ya sea la versión 3 de la Licencia, o
+ * (a su elección) cualquier versión posterior.
+ * Este programa se distribuye con la esperanza de que sea útil,
+ * pero SIN NINGUNA GARANTÍA; Sin la garantía implícita de
+ * COMERCIABILIDAD o APTITUD PARA UN PROPÓSITO PARTICULAR. Vea el
+ * GNU General Public License para más detalles.
+ * Debería haber recibido una copia de la Licencia Pública General de GNU
+ * Junto con este programa. Si no es así, consulte <http://www.gnu.org/licenses/>.
+ * arp-scan es software libre: Puedes redistribuirlo o modificarlo
+ * bajo los terminos de GNU General Public License como se indica en
+ * la Free Software Foundation, version 3 de la licencia, o
+ * posteriores.
  *
- * This file is part of arp-scan.
+ * arp-scan -- Escaneador de paquetes ARP
  *
- * arp-scan is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Autor:	Roy Hills
+ * Fecha:	13 Octubre 2005
+ * Modificado:  Alberto Avidad Fernandez (OSL)
+ * Fecha:	25 Marzo 2017
+ * Usar:
  *
- * arp-scan is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *    arp-scan [opciones] [host...]
  *
- * You should have received a copy of the GNU General Public License
- * along with arp-scan.  If not, see <http://www.gnu.org/licenses/>.
+ * Descripcion:
  *
- * arp-scan -- The ARP Scanner
+ * arp-scan manda paquetes ARP a hosts especificos y muestra si alguno responde
  *
- * Author:	Roy Hills
- * Date:	13 October 2005
- *
- * Usage:
- *    arp-scan [options] [host...]
- *
- * Description:
- *
- * arp-scan sends the specified ARP packet to the specified hosts
- * and displays any responses received.
- *
- * The ARP protocol is defined in RFC 826 Ethernet Address Resolution Protocol
+ * El protocolo ARP esta definido en RFC 826 Ethernet Address Resolution Protocol
  *
  */
 
 #include "arp-scan.h"
 
 /* Global variables */
-static host_entry *helist = NULL;	/* Array of host entries */
-static host_entry **helistptr;		/* Array of pointers to host entries */
-static host_entry **cursor;		/* Pointer to current host entry ptr */
-static unsigned num_hosts = 0;		/* Number of entries in the list */
-static unsigned responders = 0;		/* Number of hosts which responded */
-static unsigned live_count;		/* Number of entries awaiting reply */
-static int verbose=0;			/* Verbose level */
-static char filename[MAXLINE];		/* Target list file name */
-static int filename_flag=0;		/* Set if using target list file */
-static int random_flag=0;		/* Randomise the list */
-static int numeric_flag=0;		/* IP addresses only */
-static unsigned interval=0;		/* Desired interval between packets */
-static unsigned bandwidth=DEFAULT_BANDWIDTH; /* Bandwidth in bits per sec */
-static unsigned retry = DEFAULT_RETRY;	/* Number of retries */
-static unsigned timeout = DEFAULT_TIMEOUT; /* Per-host timeout */
+static host_entry *helist = NULL;	/* Array de host entries */
+static host_entry **helistptr;		/* Array de punteros para host entries */
+static host_entry **cursor;		/* Puntero to current host entry ptr */
+static unsigned num_hosts = 0;		/* Numero de entradas en la list */
+static unsigned responders = 0;		/* Numero de hosts con respuesta */
+static unsigned live_count;		/* Numero de entradas esperando respuesta */
+static int verbose=0;			/* Nivel de detalle*/
+static char filename[MAXLINE];		/* Nombre del archivo de destino */
+static int filename_flag=0;		/* Indica si usamos un fichero de destino */
+static int random_flag=0;		/* Aleatoriza la lista */
+static int numeric_flag=0;		/* Solo direcciones IP */
+static unsigned interval=0;		/* Intervalo deseado entre paquetes */
+static unsigned bandwidth=DEFAULT_BANDWIDTH; /* Ancho de banda en bits por segundo */
+static unsigned retry = DEFAULT_RETRY;	/* Numero de intentos */
+static unsigned timeout = DEFAULT_TIMEOUT; /* Timeout por host */
 static float backoff_factor = DEFAULT_BACKOFF_FACTOR;	/* Backoff factor */
-static int snaplen = SNAPLEN;		/* Pcap snap length */
-static char *if_name=NULL;		/* Interface name, e.g. "eth0" */
-static int quiet_flag=0;		/* Don't decode the packet */
-static int ignore_dups=0;		/* Don't display duplicate packets */
-static uint32_t arp_spa;		/* Source IP address */
-static int arp_spa_flag=0;		/* Source IP address specified */
-static int arp_spa_is_tpa=0;		/* Source IP is dest IP */
-static unsigned char arp_sha[ETH_ALEN];	/* Source Ethernet MAC Address */
-static int arp_sha_flag=0;		/* Source MAC address specified */
-static char ouifilename[MAXLINE];	/* OUI filename */
-static char iabfilename[MAXLINE];	/* IAB filename */
-static char macfilename[MAXLINE];	/* MAC filename */
-static char pcap_savefile[MAXLINE];	/* pcap savefile filename */
-static int arp_op=DEFAULT_ARP_OP;	/* ARP Operation code */
-static int arp_hrd=DEFAULT_ARP_HRD;	/* ARP hardware type */
-static int arp_pro=DEFAULT_ARP_PRO;	/* ARP protocol */
-static int arp_hln=DEFAULT_ARP_HLN;	/* Hardware address length */
-static int arp_pln=DEFAULT_ARP_PLN;	/* Protocol address length */
-static int eth_pro=DEFAULT_ETH_PRO;	/* Ethernet protocol type */
+static int snaplen = SNAPLEN;		/* Pcap longitud de snap */
+static char *if_name=NULL;		/* Nombre de interfaz, ejem. "eth0" */
+static int quiet_flag=0;		/* No decodifica el paquete */
+static int ignore_dups=0;		/* No mostrar paquetes duplicados */
+static uint32_t arp_spa;		/* Direccion de IP origen */
+static int arp_spa_flag=0;		/* Direccion de IP origen especificada */
+static int arp_spa_is_tpa=0;		/* Direccion de IP origen es la misma que destino */
+static unsigned char arp_sha[ETH_ALEN];	/* Direccion de origen MAC de Ethernet */
+static int arp_sha_flag=0;		/* Direccion de origen MAC especificada */
+static char ouifilename[MAXLINE];	/* OUI nombre de fichero */
+static char iabfilename[MAXLINE];	/* IAB nombre de fichero */
+static char macfilename[MAXLINE];	/* MAC nombre de fichero */
+static char pcap_savefile[MAXLINE];	/* pcap savefile nombre de fichero */
+static int arp_op=DEFAULT_ARP_OP;	/* ARP Codigo de operacion */
+static int arp_hrd=DEFAULT_ARP_HRD;	/* ARP tipo de hardware */
+static int arp_pro=DEFAULT_ARP_PRO;	/* ARP protocolo */
+static int arp_hln=DEFAULT_ARP_HLN;	/* Tamaño de direccion Hardware */
+static int arp_pln=DEFAULT_ARP_PLN;	/* Tamaño de la direccion de protocolo */
+static int eth_pro=DEFAULT_ETH_PRO;	/* Tipo de protocolo Ethernet */
 static unsigned char arp_tha[6] = {0, 0, 0, 0, 0, 0};
 static unsigned char target_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 static unsigned char source_mac[6];
 static int source_mac_flag = 0;
 static unsigned char *padding=NULL;
 static size_t padding_len=0;
-static int localnet_flag=0;		/* Scan local network */
-static int llc_flag=0;			/* Use 802.2 LLC with SNAP */
-static int ieee_8021q_vlan=-1;		/* Use 802.1Q VLAN tagging if >= 0 */
-static int pkt_write_file_flag=0;	/* Write packet to file flag */
-static int pkt_read_file_flag=0;	/* Read packet from file flag */
-static char pkt_filename[MAXLINE];	/* Read/Write packet to file filename */
-static int write_pkt_to_file=0;		/* Write packet to file for debugging */
-static int rtt_flag=0;			/* Display round-trip time */
-static pcap_dumper_t *pcap_dump_handle = NULL;	/* pcap savefile handle */
-static int plain_flag=0;		/* Only show host information */
+static int grx_flag=0;			/* Parametro de búsqueda para grx*/
+static int octeto=0;			/* Octeto para formar la ip*/
+static int localnet_flag=0;		/* Escanear la red local */
+static int llc_flag=0;			/* Usar 802.2 LLC con SNAP */
+static int ieee_8021q_vlan=-1;		/* Usar etiquetado 802.1Q VLAN si >= 0 */
+static int pkt_write_file_flag=0;	/* Grabar paquetes a fichero flag */
+static int pkt_read_file_flag=0;	/* Leer paquetes desde el fichero flag */
+static char pkt_filename[MAXLINE];	/* Leer/Grabar paquetes al fichero filename */
+static int write_pkt_to_file=0;		/* Grabar paquetes al fichero para debugging */
+static int rtt_flag=0;			/* Mostrar tiempo de ida y vuelta */
+static pcap_dumper_t *pcap_dump_handle = NULL;	/* pcap manejador de fichero para grabar */
+static int plain_flag=0;		/* Solo muestra informacion de host */
 unsigned int random_seed=0;
 
 int
 main(int argc, char *argv[]) {
    struct timeval now;
-   struct timeval diff;         /* Difference between two timevals */
-   int select_timeout;          /* Select timeout */
-   ARP_UINT64 loop_timediff;    /* Time since last packet sent in us */
-   ARP_UINT64 host_timediff; /* Time since last pkt sent to this host (us) */
-   struct timeval last_packet_time;     /* Time last packet was sent */
-   int req_interval;		/* Requested per-packet interval */
-   int cum_err=0;               /* Cumulative timing error */
+   struct timeval diff;         /* Diferencia entre dos intervalos de tiempo */
+   int select_timeout;          /* Seleciona timeout */
+   ARP_UINT64 loop_timediff;    /* Tiempo desde el ultimo paquete mandado por nosotros */
+   ARP_UINT64 host_timediff; /* Tiempo desde el ultimo paquete mandado a este host (nosotros) */
+   struct timeval last_packet_time;     /* Tiempo desde que el ultimo paquete ha sido enviado */
+   int req_interval;		/* Intervalo por paquete solicitado */
+   int cum_err=0;               /* Error de tiempo acumulado */
    struct timeval start_time;   /* Program start time */
    struct timeval end_time;     /* Program end time */
    struct timeval elapsed_time; /* Elapsed time as timeval */
@@ -115,33 +119,33 @@ main(int argc, char *argv[]) {
    bpf_u_int32 localnet;
    int datalink;
    int get_addr_status = 0;
-   int pcap_fd;			/* Pcap file descriptor */
+   int pcap_fd;			/* Pcap descriptor del fichero */
    unsigned char interface_mac[ETH_ALEN];
-   pcap_t *pcap_handle;		/* pcap handle */
+   pcap_t *pcap_handle;		/* pcap manejador */
 /*
- *      Initialise file names to the empty string.
+ *      Inicializamos los ficheros a cadenas vacias.
  */
    ouifilename[0] = '\0';
    iabfilename[0] = '\0';
    macfilename[0] = '\0';
    pcap_savefile[0] = '\0';
 /*
- *      Process options.
+ *      Procesamos la opciones.
  */
    process_options(argc, argv);
 /*
- *      Get program start time for statistics displayed on completion.
+ *      Obtener la hora de inicio del programa para las estadísticas que se muestran al finalizar.
  */
    Gettimeofday(&start_time);
 /*
- *	Obtain network interface details unless we're reading
- *	from a pcap file or writing to a binary file.
+ * Obtener detalles de la interfaz de red a menos que leamos
+ * desde un archivo pcap o escribiendo en un archivo binario.
  */
    if (!pkt_read_file_flag && !pkt_write_file_flag) {
 /*
- *	Determine network interface to use. If the interface was specified
- *	with the --interface option then use that, otherwise use
- *	pcap_lookupdev() to pick a suitable interface.
+ * Determinar la interfaz de red para su uso. Si se especificó la interfaz
+ * con la opción --interface entonces use eso, de lo contrario use
+ * pcap_lookupdev () para seleccionar una interfaz adecuada.
  */
    if (!if_name) {
       if (!(if_name=pcap_lookupdev(errbuf))) {
@@ -149,19 +153,19 @@ main(int argc, char *argv[]) {
       }
    }
 /*
- *	Obtain the MAC address for the selected interface, and use this
- *	as default for the source hardware addresses in the frame header
- *	and ARP packet if the user has not specified their values.
- *
- *	Die with an error if we can't get the MAC address, as this
- *	indicates that the interface doesn't have a MAC address, so is
- *	probably not a compatible interface type.
+
+ * Obtenga la dirección MAC de la interfaz seleccionada y utilice esta
+ * como predeterminado para las direcciones de hardware de origen en el encabezado de trama
+ * y el paquete ARP si el usuario no ha especificado sus valores.
+ * Muere con un error si no podemos obtener la dirección MAC, ya que
+ * indica que la interfaz no tiene una dirección MAC, por lo que es
+ * probablemente no es un tipo de interfaz compatible.
  */
       get_hardware_address(if_name, interface_mac);
       if (interface_mac[0]==0 && interface_mac[1]==0 &&
           interface_mac[2]==0 && interface_mac[3]==0 &&
           interface_mac[4]==0 && interface_mac[5]==0) {
-         err_msg("ERROR: Could not obtain MAC address for interface %s",
+         err_msg("ERROR: No ha sido posible obtener la direccion MAC para la interfaz %s",
                  if_name);
       }
       if (source_mac_flag == 0)
@@ -169,27 +173,26 @@ main(int argc, char *argv[]) {
       if (arp_sha_flag == 0)
          memcpy(arp_sha, interface_mac, ETH_ALEN);
 /*
- *	If the user has not specified the ARP source address, obtain the
- *	interface IP address and use that as the default value.
+ * Si el usuario no ha especificado la dirección de origen ARP, obtenga
+ * interfaz de la dirección IP y utilizarlo como valor predeterminado.
  */
       if (arp_spa_flag == 0) {
          get_addr_status = get_source_ip(if_name, &arp_spa);
          if (get_addr_status == -1) {
-            warn_msg("WARNING: Could not obtain IP address for interface %s. "
-                     "Using 0.0.0.0 for", if_name);
-            warn_msg("the source address, which is probably not what you want.");
-            warn_msg("Either configure %s with an IP address, or manually specify"
-                     " the address", if_name);
-            warn_msg("with the --arpspa option.");
+            warn_msg("ATENCION: No ha sido posible obtener la direccion para la interfaz %s. "
+                     "Usando 0.0.0.0 para", if_name);
+            warn_msg("la direccion origen, probablemente no es la que quieres.");
+            warn_msg("Configure %s con una dirección IP o especificada manualmente", if_name);
+            warn_msg("con la opcion --arpspa");
             memset(&arp_spa, '\0', sizeof(arp_spa));
          }
       }
    }
 /*
- *	Open the network device for reading with pcap, or the pcap file if we
- *	have specified --readpktfromfile. If we are writing packets to a binary
- *	file, then set pcap_handle to NULL as we don't need to read packets in
- *	this case.
+ * Abra el dispositivo de red para leer con pcap, o el archivo pcap si
+ * han especificado --readpktfromfile. Si estamos escribiendo paquetes a un archivo binario
+ * a continuación, establezca pcap_handle a NULL ya que no es necesario leer los paquetes en
+ * este caso.
  */
    if (pkt_read_file_flag) {
       if (!(pcap_handle = pcap_open_offline(pkt_filename, errbuf)))
@@ -209,28 +212,28 @@ main(int argc, char *argv[]) {
       pcap_handle = NULL;
    }
 /*
- *	If we are reading data with pcap, get and display the datalink details
+ * Si estamos leyendo datos con pcap, obtenemos y mostramos los detalles del datalink
  */
    if (pcap_handle) {
       if ((datalink=pcap_datalink(pcap_handle)) < 0)
          err_msg("pcap_datalink: %s", pcap_geterr(pcap_handle));
       if (!plain_flag) {
-         printf("Interface: %s, datalink type: %s (%s)\n",
+         printf("Interfaz: %s, tipo de enlace de datos: %s (%s)\n",
                 pkt_read_file_flag ? "savefile" : if_name,
                 pcap_datalink_val_to_name(datalink),
                 pcap_datalink_val_to_description(datalink));
       }
       if (datalink != DLT_EN10MB) {
-         warn_msg("WARNING: Unsupported datalink type");
+         warn_msg("PELIGRO: Tipo de enlace de datos no soportado");
       }
    }
 /*
- *	If we are reading from a network device, then get the associated file
- *	descriptor and configure it, determine the interface IP network and
- *	netmask, and install a pcap filter to receive only ARP responses.
- *	If we are reading from a pcap file, or writing to a binary file, just
- *	set the file descriptor to -1 to indicate that it is not associated
- *	with a network device.
+ * Si estamos leyendo desde un dispositivo de red, a continuación, obtener el archivo asociado
+ * descriptor y configurarlo, determinar la interfaz de la red IP y
+ * netmask, e instale un filtro pcap para recibir sólo respuestas ARP.
+ * Si estamos leyendo desde un archivo pcap, o escribiendo en un archivo binario, simplemente
+ * establecer el descriptor de archivo a -1 para indicar que no está asociado
+ * con un dispositivo de red.
  */
    if (!pkt_read_file_flag && !pkt_write_file_flag) {
       if ((pcap_fd=pcap_get_selectable_fd(pcap_handle)) < 0)
@@ -238,8 +241,8 @@ main(int argc, char *argv[]) {
       if ((pcap_setnonblock(pcap_handle, 1, errbuf)) < 0)
          err_msg("pcap_setnonblock: %s", errbuf);
 /*
- * For the BPF pcap implementation, set the BPF device into immediate mode,
- * otherwise it will buffer the responses.
+ * Para la implementación de pcap BPF, configure el dispositivo BPF en modo inmediato,
+ * de lo contrario almacenará las respuestas.
  */
 #ifdef ARP_PCAP_BPF
 #ifdef BIOCIMMEDIATE
@@ -252,9 +255,9 @@ main(int argc, char *argv[]) {
 #endif /* BIOCIMMEDIATE */
 #endif /* ARP_PCAP_BPF */
 /*
- * For the DLPI pcap implementation on Solaris, set the bufmod timeout to
- * zero. This has the side-effect of setting the chunk size to zero as
- * well, so bufmod will pass all incoming messages on immediately.
+ * Para la implementación de pcap DLPI en Solaris, establezca el tiempo de espera bufmod en
+ * cero. Esto tiene el efecto secundario de establecer el tamaño de trozo a cero como
+ * bien, así que bufmod pasará todos los mensajes entrantes encendido inmediatamente.
  */
 #ifdef ARP_PCAP_DLPI
       {
@@ -268,14 +271,14 @@ main(int argc, char *argv[]) {
          memset(&localnet, '\0', sizeof(localnet));
          memset(&netmask, '\0', sizeof(netmask));
          if (localnet_flag) {
-            warn_msg("ERROR: Could not obtain interface IP address and netmask");
+            warn_msg("ERROR: No puedo obtener la direccion IP y la mascara de red");
             err_msg("ERROR: pcap_lookupnet: %s", errbuf);
          }
       }
 /*
- *	The filter string selects packets addressed to the ARP source address
- *	that are Ethernet-II ARP packets, 802.3 LLC/SNAP ARP packets,
- *	802.1Q tagged ARP packets or 802.1Q tagged 802.3 LLC/SNAP ARP packets.
+ * La cadena de filtro selecciona los paquetes dirigidos a la dirección de origen ARP
+ * que son paquetes Ethernet-II ARP, paquetes 802.3 LLC / SNAP ARP,
+ * 802.1Q marcó paquetes ARP o 802.1Q marcó paquetes 802.3 LLC / SNAP ARP.
  */
       filter_string=make_message("ether dst %.2x:%.2x:%.2x:%.2x:%.2x:%.2x and "
                                  "(arp or (ether[14:4]=0xaaaa0300 and "
@@ -288,24 +291,24 @@ main(int argc, char *argv[]) {
                                  arp_sha[2], arp_sha[3],
                                  arp_sha[4], arp_sha[5]);
       if (verbose > 1)
-         warn_msg("DEBUG: pcap filter string: \"%s\"", filter_string);
+         warn_msg("DEBUG: pcap filtro de cadena: \"%s\"", filter_string);
       if ((pcap_compile(pcap_handle, &filter, filter_string, OPTIMISE,
            netmask)) < 0)
          err_msg("pcap_compile: %s", pcap_geterr(pcap_handle));
       free(filter_string);
       if ((pcap_setfilter(pcap_handle, &filter)) < 0)
          err_msg("pcap_setfilter: %s", pcap_geterr(pcap_handle));
-   } else {	/* Reading packets from file */
+   } else {	/* Leyendo paquetes desde un fichero */
       pcap_fd = -1;
    }
 /*
- *      Drop SUID privileges.
+ *      Dropea privilegios SUID.
  */
    if ((setuid(getuid())) < 0) {
       err_sys("setuid");
    }
 /*
- *	Open pcap savefile is the --pcapsavefile (-W) option was specified
+ * Opción --pcapsavefile (-W) fue especificada
  */
    if (*pcap_savefile != '\0') {
       if (!(pcap_dump_handle=pcap_dump_open(pcap_handle, pcap_savefile))) {
@@ -313,26 +316,25 @@ main(int argc, char *argv[]) {
       }
    }
 /*
- *      Check that the combination of specified options and arguments is
- *      valid.
- */
+ * Compruebe que la combinación de opciones y argumentos especificados es
+ * válido. */
    if (interval && bandwidth != DEFAULT_BANDWIDTH)
-      err_msg("ERROR: You cannot specify both --bandwidth and --interval.");
+      err_msg("ERROR: No puedes especificar a la vez --bandwidth e --interval.");
    if (localnet_flag) {
       if ((argc - optind) > 0)
-         err_msg("ERROR: You can not specify targets with the --localnet option");
+         err_msg("ERROR: No puedes especificar objetivos con la opcion --localnet activada");
       if (filename_flag)
-         err_msg("ERROR: You can not specify both --file and --localnet options");
+         err_msg("ERROR: No podemos especificar a la vez --file y la opcion --localnet");
    }
 /*
- *      If we're not reading from a file, and --localnet was not specified, then
- *	we must have some hosts given as command line arguments.
+ * Si no estamos leyendo de un archivo, y --localnet no fue especificado, entonces
+ * debemos tener algunos hosts dados como argumentos de línea de comandos.
  */
    if (!filename_flag && !localnet_flag)
       if ((argc - optind) < 1)
          usage(EXIT_FAILURE, 0);
 /*
- * Create MAC/Vendor hash table if quiet if not in effect.
+ * Crear tabla de hash de MAC / Vendedor si quiet no tiene efecto.
  */
    if (!quiet_flag) {
       char *fn;
@@ -344,35 +346,35 @@ main(int argc, char *argv[]) {
       fn = get_mac_vendor_filename(ouifilename, DATADIR, OUIFILENAME);
       count = add_mac_vendor(fn);
       if (verbose > 1 && count > 0)
-         warn_msg("DEBUG: Loaded %d IEEE OUI/Vendor entries from %s.",
+         warn_msg("DEBUG: Cargado %d IEEE OUI/Vendor entradas desde %s.",
                   count, fn);
       free(fn);
 
       fn = get_mac_vendor_filename(iabfilename, DATADIR, IABFILENAME);
       count = add_mac_vendor(fn);
       if (verbose > 1 && count > 0)
-         warn_msg("DEBUG: Loaded %d IEEE IAB/Vendor entries from %s.",
+         warn_msg("DEBUG: Cargado %d IEEE IAB/Vendor entradas desde %s.",
                   count, fn);
       free(fn);
 
       fn = get_mac_vendor_filename(macfilename, DATADIR, MACFILENAME);
       count = add_mac_vendor(fn);
       if (verbose > 1 && count > 0)
-         warn_msg("DEBUG: Loaded %d MAC/Vendor entries from %s.",
+         warn_msg("DEBUG: Cargado %d MAC/Vendor entradas desde %s.",
                   count, fn);
       free(fn);
    }
 /*
- *      Populate the list from the specified file if --file was specified, or
- *	from the interface address and mask if --localnet was specified, or
- *      otherwise from the remaining command line arguments.
+ * Rellena la lista desde el archivo especificado en --file, o
+ * desde la dirección de la interfaz y la máscara si se especificó --localnet, o
+ * de lo contrario, de los argumentos restantes de la línea de comandos.
  */
-   if (filename_flag) { /* Populate list from file */
+   if (filename_flag) { /* Rellena la lista desde fichero */
       FILE *fp;
       char line[MAXLINE];
       char *cp;
 
-      if ((strcmp(filename, "-")) == 0) {       /* Filename "-" means stdin */
+      if ((strcmp(filename, "-")) == 0) {       /* Si ponemos "-" usaremos stdin */
          fp = stdin;
       } else {
          if ((fp = fopen(filename, "r")) == NULL) {
@@ -389,7 +391,7 @@ main(int argc, char *argv[]) {
       if (fp != stdin) {
          fclose(fp);
       }
-   } else if (localnet_flag) {	/* Populate list from i/f addr & mask */
+   } else if (localnet_flag) {	/* Rellena la lista desde i/f addr & mask */
       struct in_addr if_network;
       struct in_addr if_netmask;
       char *c_network;
@@ -408,10 +410,10 @@ main(int argc, char *argv[]) {
       free(c_netmask);
 
       if (verbose) {
-         warn_msg("Using %s for localnet", localnet_descr);
+         warn_msg("Usando %s para red local", localnet_descr);
       }
       add_host_pattern(localnet_descr, timeout);
-   } else {             /* Populate list from command line arguments */
+   } else {             /* Rellena la lista desde la linea de comandos */
       argv=&argv[optind];
       while (*argv) {
          add_host_pattern(*argv, timeout);
@@ -419,12 +421,12 @@ main(int argc, char *argv[]) {
       }
    }
 /*
- *      Check that we have at least one entry in the list.
+ * Comprueba que tenemos al menos una entrada en la lista.
  */
    if (!num_hosts)
-      err_msg("ERROR: No hosts to process.");
+      err_msg("ERROR: No hay hosts para procesar.");
 /*
- *	If --writepkttofile was specified, open the specified output file.
+ * Si se ha especificado --writepkttofile, abra el archivo de salida especificado.
  */
    if (pkt_write_file_flag) {
       write_pkt_to_file = open(pkt_filename, O_WRONLY|O_CREAT|O_TRUNC, 0666);
@@ -432,28 +434,28 @@ main(int argc, char *argv[]) {
          err_sys("open %s", pkt_filename);
    }
 /*
- *      Create and initialise array of pointers to host entries.
+ * Crear e inicializar la matriz de punteros a las entradas de host.
  */
    helistptr = Malloc(num_hosts * sizeof(host_entry *));
    for (i=0; i<num_hosts; i++)
       helistptr[i] = &helist[i];
 /*
- *      Randomise the list if required.
- *	Uses Knuth's shuffle algorithm.
+ * Aleatoriza la lista si es necesario.
+ * Usa el algoritmo aleatorio de Knuth.
  */
    if (random_flag) {
       int r;
       host_entry *temp;
 /*
- *      Seed random number generator.
- *      If the random seed has been specified (is non-zero), then use that.
- *      Otherwise, seed the RNG with an unpredictable value.
- */
+ * Generador de números aleatorios de semillas.
+ * Si se ha especificado la semilla aleatoria (no es cero), entonces usa eso.
+ * De lo contrario, siembra el RNG con un valor impredecible. */
+
       if (!random_seed) {
          struct timeval tv;
 
          Gettimeofday(&tv);
-         random_seed = tv.tv_usec ^ getpid();	/* Unpredictable value */
+         random_seed = tv.tv_usec ^ getpid();	/* Valor impredecible */
       }
       init_genrand(random_seed);
 
@@ -465,67 +467,65 @@ main(int argc, char *argv[]) {
       }
    }
 /*
- *      Set current host pointer (cursor) to start of list, zero
- *      last packet sent time, and set last receive time to now.
- */
+ * Establece el puntero del host actual (cursor) al inicio de la lista, pone a cero
+ * el último paquete enviado de tiempo, y establece el tiempo hasta ahora. */
    live_count = num_hosts;
    cursor = helistptr;
    last_packet_time.tv_sec=0;
    last_packet_time.tv_usec=0;
 /*
- *      Calculate the required interval to achieve the required outgoing
- *      bandwidth unless the interval was manually specified with --interval.
+ * Calcular el intervalo requerido para lograr el ancho de banda para la salida requerida
+ *  a menos que el intervalo se especifique manualmente con --interval.rval.
  */
    if (!interval) {
       size_t packet_out_len;
 
-      packet_out_len=send_packet(NULL, NULL, NULL); /* Get packet data size */
+      packet_out_len=send_packet(NULL, NULL, NULL,0); /* Get packet data size */
       if (packet_out_len < MINIMUM_FRAME_SIZE)
          packet_out_len = MINIMUM_FRAME_SIZE;   /* Adjust to minimum size */
       packet_out_len += PACKET_OVERHEAD;	/* Add layer 2 overhead */
       interval = ((ARP_UINT64)packet_out_len * 8 * 1000000) / bandwidth;
       if (verbose > 1) {
-         warn_msg("DEBUG: pkt len=%u bytes, bandwidth=%u bps, interval=%u us",
+         warn_msg("DEBUG: pkt len=%u bytes, ancho de banda=%u bps, intervalo=%u us",
                   packet_out_len, bandwidth, interval);
       }
    }
 /*
- *      Display initial message.
+ *      Muestra mensaje inicial.
  */
    if (!plain_flag) {
-      printf("Starting %s with %u hosts (https://github.com/royhills/arp-scan)\n",
+      printf("Comenzando %s con %u hosts (https://incidencias.dipgra.es/arp-scan)\n",
           PACKAGE_STRING, num_hosts);
    }
 /*
- *      Display the lists if verbose setting is 3 or more.
+ * Muestra las listas si el ajuste detallado es 3 o más.
  */
    if (verbose > 2)
       dump_list();
 /*
- *      Main loop: send packets to all hosts in order until a response
- *      has been received or the host has exhausted its retry limit.
+ * Bucle principal: envía paquetes a todos los hosts en orden hasta que una respuesta
+ * Ha sido recibida o el host ha agotado su límite de reintento.
  *
- *      The loop exits when all hosts have either responded or timed out.
+ * El bucle se cierra cuando todos los hosts han respondido o agotado el tiempo de espera.
  */
    reset_cum_err = 1;
    req_interval = interval;
    while (live_count) {
 /*
- *      Obtain current time and calculate deltas since last packet and
- *      last packet to this host.
+ * Obtener la hora actual y calcular los deltas desde el último paquete y el 
+ * paquete pasado para es host.
  */
       Gettimeofday(&now);
 /*
- *      If the last packet was sent more than interval us ago, then we can
- *      potentially send a packet to the current host.
+ * Si el último paquete se envió hace más de un intervalo, entonces podemos
+ * envíar un paquete al host actual.
  */
       timeval_diff(&now, &last_packet_time, &diff);
       loop_timediff = (ARP_UINT64)1000000*diff.tv_sec + diff.tv_usec;
       if (loop_timediff >= (unsigned)req_interval) {
 /*
- *      If the last packet to this host was sent more than the current
- *      timeout for this host us ago, then we can potentially send a packet
- *      to it.
+ * Si el último paquete enviado a este host fue enviado con un timeout cumplido,
+ * entonces podemos enviar un paquete nuevo.
  */
          timeval_diff(&now, &((*cursor)->last_send_time), &diff);
          host_timediff = (ARP_UINT64)1000000*diff.tv_sec + diff.tv_usec;
@@ -544,10 +544,9 @@ main(int argc, char *argv[]) {
             }
             select_timeout = req_interval;
 /*
- *      If we've exceeded our retry limit, then this host has timed out so
- *      remove it from the list. Otherwise, increase the timeout by the
- *      backoff factor if this is not the first packet sent to this host
- *      and send a packet.
+ * Si hemos superado nuestro límite de reintentos, entonces este host ha expirado
+ * y lo eliminamos de la lista. De lo contrario, aumenta el tiempo de espera
+ * si este no es el primer paquete enviado a este host y envia un paquete.
  */
             if (verbose && (*cursor)->num_sent > pass_no) {
                warn_msg("---\tPass %d complete", pass_no+1);
@@ -555,9 +554,9 @@ main(int argc, char *argv[]) {
             }
             if ((*cursor)->num_sent >= retry) {
                if (verbose > 1)
-                  warn_msg("---\tRemoving host %s - Timeout",
+                  warn_msg("---\tQuitando host %s - Timeout",
                             my_ntoa((*cursor)->addr));
-               remove_host(cursor);     /* Automatically calls advance_cursor() */
+               remove_host(cursor);     /* Llama automaticamente a calls advance_cursor() */
                if (first_timeout) {
                   timeval_diff(&now, &((*cursor)->last_send_time), &diff);
                   host_timediff = (ARP_UINT64)1000000*diff.tv_sec +
@@ -565,7 +564,7 @@ main(int argc, char *argv[]) {
                   while (host_timediff >= (*cursor)->timeout && live_count) {
                      if ((*cursor)->live) {
                         if (verbose > 1)
-                           warn_msg("---\tRemoving host %s - Catch-Up Timeout",
+                           warn_msg("---\tQuitando host %s - Catch-Up Timeout",
                                     my_ntoa((*cursor)->addr));
                         remove_host(cursor);
                      } else {
@@ -578,28 +577,28 @@ main(int argc, char *argv[]) {
                   first_timeout=0;
                }
                Gettimeofday(&last_packet_time);
-            } else {    /* Retry limit not reached for this host */
+            } else {    /* Límite de reintento no alcanzado para este host*/
                if ((*cursor)->num_sent)
                   (*cursor)->timeout *= backoff_factor;
-               send_packet(pcap_handle, *cursor, &last_packet_time);
+               send_packet(pcap_handle, *cursor, &last_packet_time, octeto);
                advance_cursor();
             }
-         } else {       /* We can't send a packet to this host yet */
+         } else {       /* No podemos mandar un paquete a este host todavia */
 /*
- *      Note that there is no point calling advance_cursor() here because if
- *      host n is not ready to send, then host n+1 will not be ready either.
+ * Tenga en cuenta que no hay ningún punto llamando a advance_cursor () aquí porque si
+ * Host n no está listo para enviar, entonces host n + 1 tampoco estará listo.
  */
             select_timeout = (*cursor)->timeout - host_timediff;
-            reset_cum_err = 1;  /* Zero cumulative error */
-         } /* End If */
-      } else {          /* We can't send a packet yet */
+            reset_cum_err = 1;  /* Errores acumulados cero */
+         } /* Termina si */
+      } else {          /* No podemos mandar un paquete todavia */
          select_timeout = req_interval - loop_timediff;
-      } /* End If */
+      } /* Termina si */
       recvfrom_wto(pcap_fd, select_timeout, pcap_handle);
-   } /* End While */
+   } /* Termina mientras */
 
    if (!plain_flag) {
-      printf("\n");        /* Ensure we have a blank line */
+      printf("\n");        /* Nos aseguramos tener una linea en blanco */
    }
 
    clean_up(pcap_handle);
@@ -612,7 +611,7 @@ main(int argc, char *argv[]) {
                       elapsed_time.tv_usec/1000) / 1000.0;
 
    if (!plain_flag) {
-      printf("Ending %s: %u hosts scanned in %.3f seconds (%.2f hosts/sec). %u responded\n",
+      printf("Resultado %s: %u hosts escaneados en %.3f segundos (%.2f hosts/segundo). %u han respondido\n",
              PACKAGE_STRING, num_hosts, elapsed_seconds,
              num_hosts/elapsed_seconds, responders);
    }
@@ -620,25 +619,25 @@ main(int argc, char *argv[]) {
 }
 
 /*
- *	display_packet -- Check and display received packet
+ *	display_packet -- Comprobar y mostrar el paquete Recibido
  *
- *	Inputs:
+ *	Entradas:
  *
- *	he		The host entry corresponding to the received packet
- *	arpei		ARP packet structure
- *	extra_data	Extra data after ARP packet (padding)
- *	extra_data_len	Length of extra data
+ *	he		La entrada de hosts correspondiente al paquete Recibido
+ *	arpei		Estructura de paquete ARP
+ *	extra_data	Datos extra del paquete ARP (relleno)
+ *	extra_data_len	Tamaño de los datos extra
  *	framing		Framing type (e.g. Ethernet II, LLC)
- *	vlan_id		802.1Q VLAN identifier, or -1 if not 802.1Q
- *	frame_hdr	The Ethernet frame header
- *	pcap_header	The PCAP header struct
+ *	vlan_id		Identificador 802.1Q VLAN, o -1 si no 802.1Q
+ *	frame_hdr	La cabecera de Ethernet
+ *	pcap_header	La estructura de cabecera PCAP
  *
- *      Returns:
+ *      Devuelve:
  *
- *      None.
+ *      Nada.
  *
- *      This checks the received packet and displays details of what
- *      was received in the format: <IP-Address><TAB><Details>.
+ * Esto comprueba el paquete Recibido y muestra detalles de lo que
+ * fue Recibido en el formato: <Dirección IP> <TAB> <Detalles>.
  */
 void
 display_packet(host_entry *he, arp_ether_ipv4 *arpei,
@@ -650,11 +649,11 @@ display_packet(host_entry *he, arp_ether_ipv4 *arpei,
    char *cp2;
    int nonzero=0;
 /*
- *	Set msg to the IP address of the host entry and a tab.
+ *	Establecer msg a la dirección IP de la host entry y tab.
  */
    msg = make_message("%s\t", my_ntoa(he->addr));
 /*
- *	Decode ARP packet
+ *	Decodifica el paquete ARP
  */
    cp = msg;
    msg = make_message("%s%.2x:%.2x:%.2x:%.2x:%.2x:%.2x", cp,
@@ -663,9 +662,10 @@ display_packet(host_entry *he, arp_ether_ipv4 *arpei,
                       arpei->ar_sha[4], arpei->ar_sha[5]);
    free(cp);
 /*
- *	Check that the source address in the Ethernet frame header is the same
- *	as ar$sha in the ARP packet, and display the Ethernet source address
- *	if it is different.
+
+ * Compruebe que la dirección de origen en el encabezado de trama Ethernet es la misma
+ * que ar$sha en el paquete ARP, y mostrar la dirección de origen Ethernet
+ * si es diferente.
  */
    if ((memcmp(arpei->ar_sha, frame_hdr->src_addr, ETH_ALEN)) != 0) {
       cp = msg;
@@ -676,15 +676,10 @@ display_packet(host_entry *he, arp_ether_ipv4 *arpei,
       free(cp);
    }
 /*
- *	Find vendor from hash table and add to message if quiet if not in
- *	effect.
- *
- *	We start with more specific matches (against larger parts of the
- *	hardware address), and work towards less specific matches until
- *	we find a match or exhaust all possible matches.
+ * Buscar proveedor en la tabla de hash y añadir al mensaje si se ha indicado
  */
    if (!quiet_flag) {
-      char oui_string[13];	/* Space for full hw addr plus NULL */
+      char oui_string[13];	/* Espacio para todo hw addr plus NULL */
       const char *vendor=NULL;
       int oui_end=12;
       ENTRY hash_query;
@@ -694,7 +689,7 @@ display_packet(host_entry *he, arp_ether_ipv4 *arpei,
                arpei->ar_sha[0], arpei->ar_sha[1], arpei->ar_sha[2],
                arpei->ar_sha[3], arpei->ar_sha[4], arpei->ar_sha[5]);
       while (vendor == NULL && oui_end > 1) {
-         oui_string[oui_end] = '\0';	/* Truncate oui string */
+         oui_string[oui_end] = '\0';	/* Truncar la cadena oui */
          hash_query.key = oui_string;
          hash_result = hsearch(hash_query, FIND);
          if (hash_result) {
@@ -711,8 +706,8 @@ display_packet(host_entry *he, arp_ether_ipv4 *arpei,
          msg = make_message("%s\t%s", cp, "(Unknown)");
       free(cp);
 /*
- *	Check that any data after the ARP packet is zero.
- *	If it is non-zero, and verbose is selected, then print the padding.
+ * Comprueba que cualquier dato después del paquete ARP es cero.
+ * Si es distinto de cero y se selecciona verbose, imprima los datos de relleno.
  */
       if (extra_data_len > 0) {
          unsigned i;
@@ -733,7 +728,7 @@ display_packet(host_entry *he, arp_ether_ipv4 *arpei,
          free(cp);
       }
 /*
- *	If the framing type is not Ethernet II, then report the framing type.
+ *	Si el tipo de frame no es Ethernet II, informa del tipo de frame.
  */
       if (framing != FRAMING_ETHERNET_II) {
          cp = msg;
@@ -743,7 +738,7 @@ display_packet(host_entry *he, arp_ether_ipv4 *arpei,
          free(cp);
       }
 /*
- *	If the packet uses 802.1Q VLAN tagging, report the VLAN ID.
+ *	Si el paquete usa etiquetado 802.1Q VLAN, muestra el VLAN ID.
  */
       if (vlan_id != -1) {
          cp = msg;
@@ -751,8 +746,8 @@ display_packet(host_entry *he, arp_ether_ipv4 *arpei,
          free(cp);
       }
 /*
- *	If the ARP protocol type is not IP (0x0800), report it.
- *	This can occur with trailer encapsulation ARP replies.
+ * Si el tipo de protocolo ARP no es IP (0x0800), infórmelo.
+ * Esto puede ocurrir con respuestas de ARP de encapsulación con trailer.
  */
       if (ntohs(arpei->ar_pro) != 0x0800) {
          cp = msg;
@@ -760,7 +755,7 @@ display_packet(host_entry *he, arp_ether_ipv4 *arpei,
          free(cp);
       }
 /*
- *      If the host entry is not live, then flag this as a duplicate.
+ *      Si la host entry no esta viva, entonces la mostramos como duplicada.
  */
       if (!he->live) {
          cp = msg;
@@ -776,7 +771,7 @@ display_packet(host_entry *he, arp_ether_ipv4 *arpei,
          struct timeval pcap_timestamp;
          unsigned long rtt_us; /* round-trip time in microseconds */
 /*
- * We can't pass a pointer to pcap_header->ts directly to timeval_diff
+ * We can't pass a Puntero to pcap_header->ts directly to timeval_diff
  * because it's not guaranteed to have the same size as a struct timeval.
  * E.g. OpenBSD 5.1 on amd64.
  */
@@ -822,12 +817,16 @@ display_packet(host_entry *he, arp_ether_ipv4 *arpei,
  */
 int
 send_packet(pcap_t *pcap_handle, host_entry *he,
-            struct timeval *last_packet_time) {
+            struct timeval *last_packet_time, int oct) {
    unsigned char buf[MAX_FRAME];
    size_t buflen;
    ether_hdr frame_hdr;
    arp_ether_ipv4 arpei;
    int nsent = 0;
+   int b1, b2, b3, b4;
+   struct in_addr dire;
+   char res[20];
+
 /*
  *	Construct Ethernet frame header
  */
@@ -845,15 +844,31 @@ send_packet(pcap_t *pcap_handle, host_entry *he,
    arpei.ar_op = htons(arp_op);
    memcpy(arpei.ar_sha, arp_sha, ETH_ALEN);
    memcpy(arpei.ar_tha, arp_tha, ETH_ALEN);
+
+   if (he)
+      arpei.ar_tip = he->addr.s_addr;
+
    if (arp_spa_is_tpa) {
       if (he) {
          arpei.ar_sip = he->addr.s_addr;
       }
    } else {
-      arpei.ar_sip = arp_spa;
+	if (grx_flag){
+	   //De la ip de destino cambiamos el ultimo octeto y le ponemos el 
+	   //valor de oct, que le pasamos por parámetro 
+	   b1 = oct;
+	   b2 = (arpei.ar_tip & 0x00ff0000) >> 16;
+	   b3 = (arpei.ar_tip & 0x0000ff00) >> 8;
+	   b4 = (arpei.ar_tip & 0x000000ff);
+	   snprintf(res,20 ,"%d%s%d%s%d%s%d", b4,".",b3,".",b2,".",b1);
+	   inet_pton(AF_INET, res , &dire);
+	   arpei.ar_sip=dire.s_addr;
+        }
+	else{
+	      arpei.ar_sip = arp_spa;
+	    }
    }
-   if (he)
-      arpei.ar_tip = he->addr.s_addr;
+
 /*
  *	Copy the required data into the output buffer "buf" and set "buflen"
  *	to the number of bytes in this buffer.
@@ -919,7 +934,7 @@ clean_up(pcap_t *pcap_handle) {
          if ((pcap_stats(pcap_handle, &stats)) < 0)
             err_msg("pcap_stats: %s", pcap_geterr(pcap_handle));
 
-         printf("%u packets received by filter, %u packets dropped by kernel\n",
+         printf("%u packets Recibido by filter, %u packets dropped by kernel\n",
                 stats.ps_recv, stats.ps_drop);
       }
    }
@@ -945,271 +960,89 @@ clean_up(pcap_t *pcap_handle) {
  */
 void
 usage(int status, int detailed) {
-   fprintf(stdout, "Usage: arp-scan [options] [hosts...]\n");
+   fprintf(stdout, "Usar: arp-scan [opciones] [hosts...]\n");
    fprintf(stdout, "\n");
-   fprintf(stdout, "Target hosts must be specified on the command line unless the --file option is\n");
-   fprintf(stdout, "given, in which case the targets are read from the specified file instead, or\n");
-   fprintf(stdout, "the --localnet option is used, in which case the targets are generated from\n");
-   fprintf(stdout, "the network interface IP address and netmask.\n");
+   fprintf(stdout, "El objetivo hosts debe ser especificado en la línea de comandos salvo la opción --file\n");
+   fprintf(stdout, "en este caso, los objetivos son leidos desde un archivo, o ");
+   fprintf(stdout, "la opción --localnet que buscara\n los objetivos de nuestra red local, creadas a partir de nuestra ip y máscara\n");
    fprintf(stdout, "\n");
-   fprintf(stdout, "You will need to be root, or arp-scan must be SUID root, in order to run\n");
-   fprintf(stdout, "arp-scan, because the functions that it uses to read and write packets\n");
-   fprintf(stdout, "require root privilege.\n");
+   fprintf(stdout, "Necesitas ser root, o arp-scan debe tener el SUID 0 para funcionar\n");
    fprintf(stdout, "\n");
-   fprintf(stdout, "The target hosts can be specified as IP addresses or hostnames. You can also\n");
-   fprintf(stdout, "specify the target as IPnetwork/bits (e.g. 192.168.1.0/24) to specify all hosts\n");
-   fprintf(stdout, "in the given network (network and broadcast addresses included), or\n");
-   fprintf(stdout, "IPstart-IPend (e.g. 192.168.1.3-192.168.1.27) to specify all hosts in the\n");
-   fprintf(stdout, "inclusive range, or IPnetwork:NetMask (e.g. 192.168.1.0:255.255.255.0) to\n");
-   fprintf(stdout, "specify all hosts in the given network and mask.\n");
-   fprintf(stdout, "\n");
-   fprintf(stdout, "These different options for specifying target hosts may be used both on the\n");
-   fprintf(stdout, "command line, and also in the file specified with the --file option.\n");
+   fprintf(stdout, "Los objetivos deben ser especificados como una dirección IP o como nombres de equipo(hostnames). También se puede\n");
+   fprintf(stdout, "especificar el objetivo como IP de red/bits (ejem. 192.168.1.0/24) para especificar todos los hosts de una red.\n");
+   fprintf(stdout, "La máscara de red y broadcast también son objetivos en este caso.\n");
+   fprintf(stdout, "IPorigen-IPfin (ejem. 192.168.1.3-192.168.1.27) especifica un rango de red.\n");
    fprintf(stdout, "\n");
    if (detailed) {
-      fprintf(stdout, "Options:\n");
+      fprintf(stdout, "Opciones:\n");
       fprintf(stdout, "\n");
-      fprintf(stdout, "Note: where an option takes a value, that value is specified as a letter in\n");
-      fprintf(stdout, "angle brackets. The letter indicates the type of data that is expected:\n");
+      fprintf(stdout, "Nota: cuando una opción necesita un valor, este valor es especificado como una letra entre símbolos mayor-menor. La letra indica el tipo de valor.");
       fprintf(stdout, "\n");
-      fprintf(stdout, "<s> A character string, e.g. --file=hostlist.txt.\n");
+      fprintf(stdout, "<s> Una <s> indica una cadena o string, ejem. --file=hostlist.txt.\n");
       fprintf(stdout, "\n");
-      fprintf(stdout, "<i> An integer, which can be specified as a decimal number or as a hexadecimal\n");
-      fprintf(stdout, "    number if preceeded with 0x, e.g. --arppro=2048 or --arpro=0x0800.\n");
+      fprintf(stdout, "<i> Un entero.  Puede ser especificado en hexadecima si va precedido de 0x.\n");
+      fprintf(stdout, "    ejem. --arppro=2048 or --arpro=0x0800.\n");
       fprintf(stdout, "\n");
-      fprintf(stdout, "<f> A floating point decimal number, e.g. --backoff=1.5.\n");
+      fprintf(stdout, "<f> Un numero flotante, ejem. --backoff=1.5.\n");
       fprintf(stdout, "\n");
-      fprintf(stdout, "<m> An Ethernet MAC address, which can be specified either in the format\n");
-      fprintf(stdout, "    01:23:45:67:89:ab, or as 01-23-45-67-89-ab. The alphabetic hex characters\n");
+      fprintf(stdout, "<m> Una dirección Ethernet MAC.  Puede ser espacificado en formato\n");
+      fprintf(stdout, "    01:23:45:67:89:ab, o como 01-23-45-67-89-ab. Los caracteres alfanuméricos pueden estar en mayúsculas o minúsculas\n");
       fprintf(stdout, "    may be either upper or lower case. E.g. --arpsha=01:23:45:67:89:ab.\n");
       fprintf(stdout, "\n");
-      fprintf(stdout, "<a> An IPv4 address, e.g. --arpspa=10.0.0.1\n");
+      fprintf(stdout, "<a> Una dirección IPv4, ejem. --arpspa=10.0.0.1\n");
       fprintf(stdout, "\n");
-      fprintf(stdout, "<h> Binary data specified as a hexadecimal string, which should not\n");
-      fprintf(stdout, "    include a leading 0x. The alphabetic hex characters may be either\n");
-      fprintf(stdout, "    upper or lower case. E.g. --padding=aaaaaaaaaaaa\n");
+      fprintf(stdout, "<h> Los datos binarios especificados como una cadena hexadecimal, no deben\n");
+      fprintf(stdout, "    incluir un prefijo 0x. Los datos de relleno se pueden poner el mayusculas o minusculas\n");
+      fprintf(stdout, "    ejemp. --padding=aaaaaaaaaaaa\n");
       fprintf(stdout, "\n");
       fprintf(stdout, "<x> Something else. See the description of the option for details.\n");
-      fprintf(stdout, "\n--help or -h\t\tDisplay this usage message and exit.\n");
-      fprintf(stdout, "\n--file=<s> or -f <s>\tRead hostnames or addresses from the specified file\n");
-      fprintf(stdout, "\t\t\tinstead of from the command line. One name or IP\n");
-      fprintf(stdout, "\t\t\taddress per line. Use \"-\" for standard input.\n");
-      fprintf(stdout, "\n--localnet or -l\tGenerate addresses from network interface configuration.\n");
-      fprintf(stdout, "\t\t\tUse the network interface IP address and network mask\n");
-      fprintf(stdout, "\t\t\tto generate the list of target host addresses.\n");
-      fprintf(stdout, "\t\t\tThe list will include the network and broadcast\n");
-      fprintf(stdout, "\t\t\taddresses, so an interface address of 10.0.0.1 with\n");
-      fprintf(stdout, "\t\t\tnetmask 255.255.255.0 would generate 256 target\n");
-      fprintf(stdout, "\t\t\thosts from 10.0.0.0 to 10.0.0.255 inclusive.\n");
-      fprintf(stdout, "\t\t\tIf you use this option, you cannot specify the --file\n");
-      fprintf(stdout, "\t\t\toption or specify any target hosts on the command line.\n");
-      fprintf(stdout, "\t\t\tThe interface specifications are taken from the\n");
-      fprintf(stdout, "\t\t\tinterface that arp-scan will use, which can be\n");
-      fprintf(stdout, "\t\t\tchanged with the --interface option.\n");
-      fprintf(stdout, "\n--retry=<i> or -r <i>\tSet total number of attempts per host to <i>,\n");
+      fprintf(stdout, "\n--help o -h\t\tMuestra esta pantalla de ayuda y sale.\n");
+      fprintf(stdout, "\n--file=<s> o -f <s>\tLee hostnames o direcciones ip desde un archivo\n");
+      fprintf(stdout, "\t\t\to desde la entrada stdin, usando \"-\" de la forma --file\"-\".\n");
+      fprintf(stdout, "\n--localnet o -l\tGenera las direcciones de red en funcion de la ip de nuetra interfaz.\n");
+      fprintf(stdout, "\t\t\tSi usas esta opcion, no puedes usar --file\n");
+      fprintf(stdout, "\n--retry=<i> o -r <i>\tPone el numeros de intentos por host a <i>,\n");
       fprintf(stdout, "\t\t\tdefault=%d.\n", DEFAULT_RETRY);
-      fprintf(stdout, "\n--timeout=<i> or -t <i>\tSet initial per host timeout to <i> ms, default=%d.\n", DEFAULT_TIMEOUT);
-      fprintf(stdout, "\t\t\tThis timeout is for the first packet sent to each host.\n");
-      fprintf(stdout, "\t\t\tsubsequent timeouts are multiplied by the backoff\n");
-      fprintf(stdout, "\t\t\tfactor which is set with --backoff.\n");
-      fprintf(stdout, "\n--interval=<x> or -i <x> Set minimum packet interval to <x>.\n");
-      fprintf(stdout, "\t\t\tThis controls the outgoing bandwidth usage by limiting\n");
-      fprintf(stdout, "\t\t\tthe rate at which packets can be sent. The packet\n");
-      fprintf(stdout, "\t\t\tinterval will be no smaller than this number.\n");
-      fprintf(stdout, "\t\t\tIf you want to use up to a given bandwidth, then it is\n");
-      fprintf(stdout, "\t\t\teasier to use the --bandwidth option instead.\n");
-      fprintf(stdout, "\t\t\tThe interval specified is in milliseconds by default,\n");
-      fprintf(stdout, "\t\t\tor in microseconds if \"u\" is appended to the value.\n");
-      fprintf(stdout, "\n--bandwidth=<x> or -B <x> Set desired outbound bandwidth to <x>, default=%d.\n", DEFAULT_BANDWIDTH);
-      fprintf(stdout, "\t\t\tThe value is in bits per second by default. If you\n");
-      fprintf(stdout, "\t\t\tappend \"K\" to the value, then the units are kilobits\n");
-      fprintf(stdout, "\t\t\tper sec; and if you append \"M\" to the value, the\n");
-      fprintf(stdout, "\t\t\tunits are megabits per second.\n");
-      fprintf(stdout, "\t\t\tThe \"K\" and \"M\" suffixes represent the decimal, not\n");
-      fprintf(stdout, "\t\t\tbinary, multiples. So 64K is 64000, not 65536.\n");
-      fprintf(stdout, "\t\t\tYou cannot specify both --interval and --bandwidth\n");
-      fprintf(stdout, "\t\t\tbecause they are just different ways to change the\n");
-      fprintf(stdout, "\t\t\tsame underlying parameter.\n");
-      fprintf(stdout, "\n--backoff=<f> or -b <f>\tSet timeout backoff factor to <f>, default=%.2f.\n", DEFAULT_BACKOFF_FACTOR);
-      fprintf(stdout, "\t\t\tThe per-host timeout is multiplied by this factor\n");
-      fprintf(stdout, "\t\t\tafter each timeout. So, if the number of retries\n");
-      fprintf(stdout, "\t\t\tis 3, the initial per-host timeout is 500ms and the\n");
-      fprintf(stdout, "\t\t\tbackoff factor is 1.5, then the first timeout will be\n");
-      fprintf(stdout, "\t\t\t500ms, the second 750ms and the third 1125ms.\n");
-      fprintf(stdout, "\n--verbose or -v\t\tDisplay verbose progress messages.\n");
-      fprintf(stdout, "\t\t\tUse more than once for greater effect:\n");
-      fprintf(stdout, "\t\t\t1 - Display the network address and mask used when the\n");
-      fprintf(stdout, "\t\t\t    --localnet option is specified, display any\n");
-      fprintf(stdout, "\t\t\t    nonzero packet padding, display packets received\n");
-      fprintf(stdout, "\t\t\t    from unknown hosts, and show when each pass through\n");
-      fprintf(stdout, "\t\t\t    the list completes.\n");
-      fprintf(stdout, "\t\t\t2 - Show each packet sent and received, when entries\n");
-      fprintf(stdout, "\t\t\t    are removed from the list, the pcap filter string,\n");
-      fprintf(stdout, "\t\t\t    and counts of MAC/Vendor mapping entries.\n");
-      fprintf(stdout, "\t\t\t3 - Display the host list before scanning starts.\n");
-      fprintf(stdout, "\n--version or -V\t\tDisplay program version and exit.\n");
-      fprintf(stdout, "\n--random or -R\t\tRandomise the host list.\n");
-      fprintf(stdout, "\t\t\tThis option randomises the order of the hosts in the\n");
-      fprintf(stdout, "\t\t\thost list, so the ARP packets are sent to the hosts in\n");
-      fprintf(stdout, "\t\t\ta random order. It uses the Knuth shuffle algorithm.\n");
-      fprintf(stdout, "\n--randomseed=<i>\tUse <i> to seed the pseudo random number generator.\n");
-      fprintf(stdout, "\t\t\tThis option seeds the PRNG with the specified number,\n");
-      fprintf(stdout, "\t\t\twhich can be useful if you want to ensure that the\n");
-      fprintf(stdout, "\t\t\trandom host list is reproducable. By default, the PRNG\n");
-      fprintf(stdout, "\t\t\tis seeded with an unpredictable value. This option is\n");
-      fprintf(stdout, "\t\t\tonly effective in conjunction with the --random (-R)\n");
-      fprintf(stdout, "\t\t\toption.\n");
-      fprintf(stdout, "\n--numeric or -N\t\tIP addresses only, no hostnames.\n");
-      fprintf(stdout, "\t\t\tWith this option, all hosts must be specified as\n");
-      fprintf(stdout, "\t\t\tIP addresses. Hostnames are not permitted. No DNS\n");
-      fprintf(stdout, "\t\t\tlookups will be performed.\n");
-      fprintf(stdout, "\n--snap=<i> or -n <i>\tSet the pcap snap length to <i>. Default=%d.\n", SNAPLEN);
-      fprintf(stdout, "\t\t\tThis specifies the frame capture length. This\n");
-      fprintf(stdout, "\t\t\tlength includes the data-link header.\n");
-      fprintf(stdout, "\t\t\tThe default is normally sufficient.\n");
-      fprintf(stdout, "\n--interface=<s> or -I <s> Use network interface <s>.\n");
-      fprintf(stdout, "\t\t\tIf this option is not specified, arp-scan will search\n");
-      fprintf(stdout, "\t\t\tthe system interface list for the lowest numbered,\n");
-      fprintf(stdout, "\t\t\tconfigured up interface (excluding loopback).\n");
-      fprintf(stdout, "\t\t\tThe interface specified must support ARP.\n");
-      fprintf(stdout, "\n--quiet or -q\t\tOnly display minimal output. No protocol decoding.\n");
-      fprintf(stdout, "\t\t\tIf this option is specified, then only the IP address\n");
-      fprintf(stdout, "\t\t\tand MAC address are displayed for each responding host.\n");
-      fprintf(stdout, "\t\t\tNo protocol decoding is performed and the OUI mapping\n");
-      fprintf(stdout, "\t\t\tfiles are not used.\n");
-      fprintf(stdout, "\n--plain or -x\t\tDisplay plain output showing only responding hosts.\n");
-      fprintf(stdout, "\t\t\tThis option supresses the printing of the header and\n");
-      fprintf(stdout, "\t\t\tfooter text, and only displays one line for each\n");
-      fprintf(stdout, "\t\t\tresponding host. Useful if the output will be\n");
-      fprintf(stdout, "\t\t\tparsed by a script.\n");
-      fprintf(stdout, "\n--ignoredups or -g\tDon't display duplicate packets.\n");
-      fprintf(stdout, "\t\t\tBy default, duplicate packets are displayed and are\n");
-      fprintf(stdout, "\t\t\tflagged with \"(DUP: n)\".\n");
-      fprintf(stdout, "\n--ouifile=<s> or -O <s>\tUse IEEE Ethernet OUI to vendor mapping file <s>.\n");
-      fprintf(stdout, "\t\t\tIf this option is not specified, the default filename\n");
-      fprintf(stdout, "\t\t\tis %s in the current directory. If that is\n", OUIFILENAME);
-      fprintf(stdout, "\t\t\tnot found, then the file\n");
-      fprintf(stdout, "\t\t\t%s/%s is used.\n", DATADIR, OUIFILENAME);
-      fprintf(stdout, "\n--iabfile=<s> or -O <s>\tUse IEEE Ethernet IAB to vendor mapping file <s>.\n");
-      fprintf(stdout, "\t\t\tIf this option is not specified, the default filename\n");
-      fprintf(stdout, "\t\t\tis %s in the current directory. If that is\n", IABFILENAME);
-      fprintf(stdout, "\t\t\tnot found, then the file\n");
-      fprintf(stdout, "\t\t\t%s/%s is used.\n", DATADIR, IABFILENAME);
-      fprintf(stdout, "\n--macfile=<s> or -O <s>\tUse custom Ethernet MAC to vendor mapping file <s>.\n");
-      fprintf(stdout, "\t\t\tIf this option is not specified, the default filename\n");
-      fprintf(stdout, "\t\t\tis %s in the current directory. If that is\n", MACFILENAME);
-      fprintf(stdout, "\t\t\tnot found, then the file\n");
-      fprintf(stdout, "\t\t\t%s/%s is used.\n", DATADIR, MACFILENAME);
-      fprintf(stdout, "\n--srcaddr=<m> or -S <m> Set the source Ethernet MAC address to <m>.\n");
-      fprintf(stdout, "\t\t\tThis sets the 48-bit hardware address in the Ethernet\n");
-      fprintf(stdout, "\t\t\tframe header for outgoing ARP packets. It does not\n");
-      fprintf(stdout, "\t\t\tchange the hardware address in the ARP packet, see\n");
-      fprintf(stdout, "\t\t\t--arpsha for details on how to change that address.\n");
-      fprintf(stdout, "\t\t\tThe default is the Ethernet address of the outgoing\n");
-      fprintf(stdout, "\t\t\tinterface.\n");
-      fprintf(stdout, "\n--destaddr=<m> or -T <m> Send the packets to Ethernet MAC address <m>\n");
-      fprintf(stdout, "\t\t\tThis sets the 48-bit destination address in the\n");
-      fprintf(stdout, "\t\t\tEthernet frame header.\n");
-      fprintf(stdout, "\t\t\tThe default is the broadcast address ff:ff:ff:ff:ff:ff.\n");
-      fprintf(stdout, "\t\t\tMost operating systems will also respond if the ARP\n");
-      fprintf(stdout, "\t\t\trequest is sent to their MAC address, or to a\n");
-      fprintf(stdout, "\t\t\tmulticast address that they are listening on.\n");
-      fprintf(stdout, "\n--arpsha=<m> or -u <m>\tUse <m> as the ARP source Ethernet address\n");
-      fprintf(stdout, "\t\t\tThis sets the 48-bit ar$sha field in the ARP packet\n");
-      fprintf(stdout, "\t\t\tIt does not change the hardware address in the frame\n");
-      fprintf(stdout, "\t\t\theader, see --srcaddr for details on how to change\n");
-      fprintf(stdout, "\t\t\tthat address. The default is the Ethernet address of\n");
-      fprintf(stdout, "\t\t\tthe outgoing interface.\n");
-      fprintf(stdout, "\n--arptha=<m> or -w <m>\tUse <m> as the ARP target Ethernet address\n");
-      fprintf(stdout, "\t\t\tThis sets the 48-bit ar$tha field in the ARP packet\n");
-      fprintf(stdout, "\t\t\tThe default is zero, because this field is not used\n");
-      fprintf(stdout, "\t\t\tfor ARP request packets.\n");
-      fprintf(stdout, "\n--prototype=<i> or -y <i> Set the Ethernet protocol type to <i>, default=0x%.4x.\n", DEFAULT_ETH_PRO);
-      fprintf(stdout, "\t\t\tThis sets the 16-bit protocol type field in the\n");
-      fprintf(stdout, "\t\t\tEthernet frame header.\n");
-      fprintf(stdout, "\t\t\tSetting this to a non-default value will result in the\n");
-      fprintf(stdout, "\t\t\tpacket being ignored by the target, or sent to the\n");
-      fprintf(stdout, "\t\t\twrong protocol stack.\n");
-      fprintf(stdout, "\n--arphrd=<i> or -H <i>\tUse <i> for the ARP hardware type, default=%d.\n", DEFAULT_ARP_HRD);
-      fprintf(stdout, "\t\t\tThis sets the 16-bit ar$hrd field in the ARP packet.\n");
-      fprintf(stdout, "\t\t\tThe normal value is 1 (ARPHRD_ETHER). Most, but not\n");
-      fprintf(stdout, "\t\t\tall, operating systems will also respond to 6\n");
-      fprintf(stdout, "\t\t\t(ARPHRD_IEEE802). A few systems respond to any value.\n");
-      fprintf(stdout, "\n--arppro=<i> or -p <i>\tUse <i> for the ARP protocol type, default=0x%.4x.\n", DEFAULT_ARP_PRO);
-      fprintf(stdout, "\t\t\tThis sets the 16-bit ar$pro field in the ARP packet.\n");
-      fprintf(stdout, "\t\t\tMost operating systems only respond to 0x0800 (IPv4)\n");
-      fprintf(stdout, "\t\t\tbut some will respond to other values as well.\n");
-      fprintf(stdout, "\n--arphln=<i> or -a <i>\tSet the hardware address length to <i>, default=%d.\n", DEFAULT_ARP_HLN);
-      fprintf(stdout, "\t\t\tThis sets the 8-bit ar$hln field in the ARP packet.\n");
-      fprintf(stdout, "\t\t\tIt sets the claimed length of the hardware address\n");
-      fprintf(stdout, "\t\t\tin the ARP packet. Setting it to any value other than\n");
-      fprintf(stdout, "\t\t\tthe default will make the packet non RFC compliant.\n");
-      fprintf(stdout, "\t\t\tSome operating systems may still respond to it though.\n");
-      fprintf(stdout, "\t\t\tNote that the actual lengths of the ar$sha and ar$tha\n");
-      fprintf(stdout, "\t\t\tfields in the ARP packet are not changed by this\n");
-      fprintf(stdout, "\t\t\toption; it only changes the ar$hln field.\n");
-      fprintf(stdout, "\n--arppln=<i> or -P <i>\tSet the protocol address length to <i>, default=%d.\n", DEFAULT_ARP_PLN);
-      fprintf(stdout, "\t\t\tThis sets the 8-bit ar$pln field in the ARP packet.\n");
-      fprintf(stdout, "\t\t\tIt sets the claimed length of the protocol address\n");
-      fprintf(stdout, "\t\t\tin the ARP packet. Setting it to any value other than\n");
-      fprintf(stdout, "\t\t\tthe default will make the packet non RFC compliant.\n");
-      fprintf(stdout, "\t\t\tSome operating systems may still respond to it though.\n");
-      fprintf(stdout, "\t\t\tNote that the actual lengths of the ar$spa and ar$tpa\n");
-      fprintf(stdout, "\t\t\tfields in the ARP packet are not changed by this\n");
-      fprintf(stdout, "\t\t\toption; it only changes the ar$pln field.\n");
-      fprintf(stdout, "\n--arpop=<i> or -o <i>\tUse <i> for the ARP operation, default=%d.\n", DEFAULT_ARP_OP);
-      fprintf(stdout, "\t\t\tThis sets the 16-bit ar$op field in the ARP packet.\n");
-      fprintf(stdout, "\t\t\tMost operating systems will only respond to the value 1\n");
-      fprintf(stdout, "\t\t\t(ARPOP_REQUEST). However, some systems will respond\n");
-      fprintf(stdout, "\t\t\tto other values as well.\n");
-      fprintf(stdout, "\n--arpspa=<a> or -s <a>\tUse <a> as the source IP address.\n");
-      fprintf(stdout, "\t\t\tThe address should be specified in dotted quad format;\n");
-      fprintf(stdout, "\t\t\tor the literal string \"dest\", which sets the source\n");
-      fprintf(stdout, "\t\t\taddress to be the same as the target host address.\n");
-      fprintf(stdout, "\t\t\tThis sets the 32-bit ar$spa field in the ARP packet.\n");
-      fprintf(stdout, "\t\t\tSome operating systems check this, and will only\n");
-      fprintf(stdout, "\t\t\trespond if the source address is within the network\n");
-      fprintf(stdout, "\t\t\tof the receiving interface. Others don't care, and\n");
-      fprintf(stdout, "\t\t\twill respond to any source address.\n");
-      fprintf(stdout, "\t\t\tBy default, the outgoing interface address is used.\n");
-      fprintf(stdout, "\n\t\t\tWARNING: Setting ar$spa to the destination IP address\n");
-      fprintf(stdout, "\t\t\tcan disrupt some operating systems, as they assume\n");
-      fprintf(stdout, "\t\t\tthere is an IP address clash if they receive an ARP\n");
-      fprintf(stdout, "\t\t\trequest for their own address.\n");
-      fprintf(stdout, "\n--padding=<h> or -A <h>\tSpecify padding after packet data.\n");
-      fprintf(stdout, "\t\t\tSet the padding data to hex value <h>. This data is\n");
-      fprintf(stdout, "\t\t\tappended to the end of the ARP packet, after the data.\n");
-      fprintf(stdout, "\t\t\tMost, if not all, operating systems will ignore any\n");
-      fprintf(stdout, "\t\t\tpadding. The default is no padding, although the\n");
-      fprintf(stdout, "\t\t\tEthernet driver on the sending system may pad the\n");
-      fprintf(stdout, "\t\t\tpacket to the minimum Ethernet frame length.\n");
+      fprintf(stdout, "\n--timeout=<i> o -t <i>\tInicia el timeout por equipo a <i> ms, default=%d.\n", DEFAULT_TIMEOUT);
+      fprintf(stdout, "\n--interval=<x> o -i <x> Pone el minimo intervalo de paquetes a <x>.\n");
+      fprintf(stdout, "\n--bandwidth=<x> o -B <x> Establezca el ancho de banda de salida deseado para <x>, default=%d.\n", DEFAULT_BANDWIDTH);
+      fprintf(stdout, "\n--backoff=<f> o -b <f>\tEstablece el timeout backoff factor a <f>, default=%.2f.\n", DEFAULT_BACKOFF_FACTOR);
+      fprintf(stdout, "\n--verbose o -v\t\tMuestra los mensajes en modo verbose. Hay tres modos 1,2,3\n");
+      fprintf(stdout, "\n--version o -V\t\tMuestra la version del programa y sale.\n");
+      fprintf(stdout, "\n--random o -R\t\tAleatoriza la lista de host.\n");
+      fprintf(stdout, "\n--randomseed=<i>\tUsa <i> Para sembrar el generador de números pseudo aleatorios.\n");
+      fprintf(stdout, "\n--numeric o -N\t\tSolo direcciones IP, no aceptamos hostnames.\n");
+      fprintf(stdout, "\n--snap=<i> o -n <i>\tEstablezca el tamaño de pcap snap a <i>. Default=%d.\n", SNAPLEN);
+      fprintf(stdout, "\n--interface=<s> o -I <s> Establezca la interfaz de red <s>.\n");
+      fprintf(stdout, "\n--quiet o -q\t\tSolo muestra la minima informacion.\n");
+      fprintf(stdout, "\n--plain o -x\t\tMuestra solo las respuestas de hosts.\n");
+      fprintf(stdout, "\n--ignoredups o -g\tNo muestra paquetes duplicados.\n");
+      fprintf(stdout, "\n--ouifile=<s> o -O <s>\tUsa IEEE Ethernet OUI para mapear el vendedor <s>.\n");
+      fprintf(stdout, "\n--iabfile=<s> o -O <s>\tUsa IEEE Ethernet IAB para mapear el vendedor <s>.\n");
+      fprintf(stdout, "\n--macfile=<s> o -O <s>\tUsa la Ethernet MAC para mapear el vendedor <s>.\n");
+      fprintf(stdout, "\n--srcaddr=<m> o -S <m> Pone el origen de Ethernet MAC a <m>.\n");
+      fprintf(stdout, "\n--destaddr=<m> o -T <m> Manda el paquete a Ethernet MAC address <m>\n");
+      fprintf(stdout, "\n--arpsha=<m> o -u <m>\tUsa <m> como el ARP source Ethernet address\n");
+      fprintf(stdout, "\n--arptha=<m> o -w <m>\tUsa <m> como the ARP target Ethernet address\n");
+      fprintf(stdout, "\n--prototype=<i> o -y <i> Pone el tipo de protocolo de Ethernet <i>, default=0x%.4x.\n", DEFAULT_ETH_PRO);
+      fprintf(stdout, "\n--arphrd=<i> o -H <i>\tPone <i> para la direccion de hardware ARP, default=%d.\n", DEFAULT_ARP_HRD);
+      fprintf(stdout, "\n--arppro=<i> o -p <i>\tUsa <i> para el tipo de protocolo ARP, default=0x%.4x.\n", DEFAULT_ARP_PRO);
+      fprintf(stdout, "\n--arphln=<i> o -a <i>\tPone el tamaño de la direccion de hardware a <i>, default=%d.\n", DEFAULT_ARP_HLN);
+      fprintf(stdout, "\n--arppln=<i> o -P <i>\tPone la direccion del protocolo <i>, default=%d.\n", DEFAULT_ARP_PLN);
+      fprintf(stdout, "\n--arpop=<i> o -o <i>\tUsa <i> como operacion para ARP, default=%d.\n", DEFAULT_ARP_OP);
+      fprintf(stdout, "\n--arpspa=<a> o -s <a>\tUsa <a> como la direccion de origen IP.\n");
+      fprintf(stdout, "\n--padding= o -A \tEspecifica padding after packet data.\n");
+      fprintf(stdout, "\n--grx=<i> o -G <i>\tUsamos <i> como ultimo octeto de la ip origen.\n");
       fprintf(stdout, "\n--llc or -L\t\tUse RFC 1042 LLC framing with SNAP.\n");
-      fprintf(stdout, "\t\t\tThis option causes the outgoing ARP packets to use\n");
-      fprintf(stdout, "\t\t\tIEEE 802.2 framing with a SNAP header as described\n");
-      fprintf(stdout, "\t\t\tin RFC 1042. The default is to use Ethernet-II\n");
-      fprintf(stdout, "\t\t\tframing.\n");
-      fprintf(stdout, "\t\t\tarp-scan will decode and display received ARP packets\n");
-      fprintf(stdout, "\t\t\tin either Ethernet-II or IEEE 802.2 formats\n");
-      fprintf(stdout, "\t\t\tirrespective of this option.\n");
-      fprintf(stdout, "\n--vlan=<i> or -Q <i>\tUse 802.1Q tagging with VLAN id <i>.\n");
-      fprintf(stdout, "\t\t\tThis option causes the outgoing ARP packets to use\n");
-      fprintf(stdout, "\t\t\t802.1Q VLAN tagging with a VLAN ID of <i>, which should\n");
-      fprintf(stdout, "\t\t\tbe in the range 0 to 4095 inclusive.\n");
-      fprintf(stdout, "\t\t\tarp-scan will always decode and display received ARP\n");
-      fprintf(stdout, "\t\t\tpackets in 802.1Q format irrespective of this option.\n");
-      fprintf(stdout, "\n--pcapsavefile=<s> or -W <s>\tWrite received packets to pcap savefile <s>.\n");
-      fprintf(stdout, "\t\t\tThis option causes received ARP responses to be written\n");
-      fprintf(stdout, "\t\t\tto the specified pcap savefile as well as being decoded\n");
-      fprintf(stdout, "\t\t\tand displayed. This savefile can be analysed with\n");
-      fprintf(stdout, "\t\t\tprograms that understand the pcap file format, such as\n");
-      fprintf(stdout, "\t\t\t\"tcpdump\" and \"wireshark\".\n");
-      fprintf(stdout, "\n--rtt or -D\t\tDisplay the packet round-trip time.\n");
+      fprintf(stdout, "\n--vlan=<i> or -Q <i>\tUsa 802.1Q etiquetado con VLAN id <i>.\n");
+      fprintf(stdout, "\n--pcapsavefile=<s> or -W <s>\tGuarda los paquetes recibidos a un archivo <s>.\n");
+      fprintf(stdout, "\n--rtt or -D\t\tMuestra el tiempo de viaje del paquete.\n");
    } else {
-      fprintf(stdout, "use \"arp-scan --help\" for detailed information on the available options.\n");
+      fprintf(stdout, "usa \"arp-scan --help\" para mostrar informacion sobre las opciones.\n");
    }
    fprintf(stdout, "\n");
-   fprintf(stdout, "Report bugs or send suggestions at %s\n", PACKAGE_BUGREPORT);
-   fprintf(stdout, "See the arp-scan homepage at https://github.com/royhills/arp-scan\n");
+   fprintf(stdout, "Mande cualquier problema o sugerencia a %s\n", PACKAGE_BUGREPORT);
+   fprintf(stdout, "Vea la web https://incidencias.dipgra.es/arp-scan\n");
    exit(status);
 }
 
@@ -1266,21 +1099,21 @@ add_host_pattern(const char *pattern, unsigned host_timeout) {
                           REG_EXTENDED|REG_NOSUB))) {
          char errbuf[MAXLINE];
          regerror(result, &iprange_pat, errbuf, MAXLINE);
-         err_msg("ERROR: cannot compile regex pattern \"%s\": %s",
+         err_msg("ERROR: no puedo compilar el patron regex \"%s\": %s",
                  iprange_pat_str, errbuf);
       }
       if ((result=regcomp(&ipslash_pat, ipslash_pat_str,
                           REG_EXTENDED|REG_NOSUB))) {
          char errbuf[MAXLINE];
          regerror(result, &ipslash_pat, errbuf, MAXLINE);
-         err_msg("ERROR: cannot compile regex pattern \"%s\": %s",
+         err_msg("ERROR: no puedo compilar el patron regex \"%s\": %s",
                  ipslash_pat_str, errbuf);
       }
       if ((result=regcomp(&ipmask_pat, ipmask_pat_str,
                           REG_EXTENDED|REG_NOSUB))) {
          char errbuf[MAXLINE];
          regerror(result, &ipmask_pat, errbuf, MAXLINE);
-         err_msg("ERROR: cannot compile regex pattern \"%s\": %s",
+         err_msg("ERROR: no puedo compilar el patron regex \"%s\": %s",
                  ipmask_pat_str, errbuf);
       }
    }
@@ -1296,7 +1129,7 @@ add_host_pattern(const char *pattern, unsigned host_timeout) {
       cp=strchr(patcopy, '/');
       *(cp++)='\0';	/* patcopy points to IPnet, cp points to bits */
       if (!(inet_aton(patcopy, &in_val)))
-         err_msg("ERROR: %s is not a valid IP address", patcopy);
+         err_msg("ERROR: %s no es una IP valida", patcopy);
       ipnet_val=ntohl(in_val.s_addr);	/* We need host byte order */
       numbits=Strtoul(cp, 10);
       if (numbits<3 || numbits>32)
@@ -1492,7 +1325,7 @@ add_host(const char *host_name, unsigned host_timeout, int numeric_only) {
  *
  *	inputs:
  *
- *	he = Pointer to host entry to remove.
+ *	he = Puntero to host entry to remove.
  *
  *	Returns:
  *
@@ -1544,11 +1377,11 @@ advance_cursor(void) {
  *
  *	Inputs:
  *
- *	he 	Pointer to the current position in the list. Search runs
+ *	he 	Puntero to the current position in the list. Search runs
  *		backwards starting from this point.
  *	addr 	The source IP address that the packet came from.
  *
- *	Returns a pointer to the host entry associated with the specified IP
+ *	Returns a Puntero to the host entry associated with the specified IP
  *	or NULL if no match found.
  *
  *	This routine finds the host by IP address by comparing "addr" against
@@ -1707,7 +1540,7 @@ callback(u_char *args ATTRIBUTE_UNUSED,
  */
    source_ip.s_addr = arpei.ar_sip;
 /*
- *	We've received a response. Try to match up the packet by IP address
+ *	We've Recibido a response. Try to match up the packet by IP address
  *
  *	We should really start searching at the host before the cursor, as we
  *	know that the host to match cannot be the one at the cursor position
@@ -1725,7 +1558,7 @@ callback(u_char *args ATTRIBUTE_UNUSED,
  */
       temp_cursor->num_recv++;
       if (verbose > 1)
-         warn_msg("---\tReceived packet #%u from %s",
+         warn_msg("---\tPaquete recibido #%u desde %s",
                   temp_cursor->num_recv ,my_ntoa(source_ip));
       if ((temp_cursor->live || !ignore_dups)) {
          if (pcap_dump_handle) {
@@ -1736,16 +1569,16 @@ callback(u_char *args ATTRIBUTE_UNUSED,
          responders++;
       }
       if (verbose > 1)
-         warn_msg("---\tRemoving host %s - Received %d bytes",
+         warn_msg("---\tQuitando host %s - Recibido %d bytes",
                   my_ntoa(source_ip), n);
       remove_host(&temp_cursor);
    } else {
 /*
- *	The received packet is not from an IP address in the list
+ *	The Recibido packet is not from an IP address in the list
  *	Issue a message to that effect and ignore the packet.
  */
       if (verbose)
-         warn_msg("---\tIgnoring %d bytes from unknown host %s", n, my_ntoa(source_ip));
+         warn_msg("---\tIgnorando %d bytes desde host desconocido %s", n, my_ntoa(source_ip));
    }
 }
 
@@ -1765,6 +1598,7 @@ void
 process_options(int argc, char *argv[]) {
    struct option long_options[] = {
       {"file", required_argument, 0, 'f'},
+      {"grx", required_argument, 0, 'G'},
       {"help", no_argument, 0, 'h'},
       {"retry", required_argument, 0, 'r'},
       {"timeout", required_argument, 0, 't'},
@@ -1813,7 +1647,7 @@ process_options(int argc, char *argv[]) {
  * Digits:      0123456789
  */
    const char *short_options =
-      "f:hr:t:i:b:vVn:I:qgRNB:O:s:o:H:p:T:P:a:A:y:u:w:S:F:m:lLQ:W:Dx";
+      "f:G:hr:t:i:b:vVn:I:qgRNB:O:s:o:H:p:T:P:a:A:y:u:w:S:F:m:lLQ:W:Dx";
    int arg;
    int options_index=0;
 
@@ -1825,6 +1659,10 @@ process_options(int argc, char *argv[]) {
          case 'f':	/* --file */
             strlcpy(filename, optarg, sizeof(filename));
             filename_flag=1;
+            break;
+         case 'G':	/* --grx */
+	    octeto=Strtol(optarg, 0);
+            grx_flag=1;
             break;
          case 'h':	/* --help */
             usage(EXIT_SUCCESS, 1);
@@ -1986,10 +1824,10 @@ void
 arp_scan_version (void) {
    fprintf(stdout, "%s\n\n", PACKAGE_STRING);
    fprintf(stdout, "Copyright (C) 2005-2016 Roy Hills, NTA Monitor Ltd.\n");
-   fprintf(stdout, "arp-scan comes with NO WARRANTY to the extent permitted by law.\n");
-   fprintf(stdout, "You may redistribute copies of arp-scan under the terms of the GNU\n");
+   fprintf(stdout, "Modificado por Alberto Avidad Fernandez.OSL Diputación de Granada\n");
+   fprintf(stdout, "Se puede redistribuir copias de arp-scan bajo los terminos de la licencia GNU\n");
    fprintf(stdout, "General Public License.\n");
-   fprintf(stdout, "For more information about these matters, see the file named COPYING.\n");
+   fprintf(stdout, "Para más información lea el fichero COPYING.\n");
    fprintf(stdout, "\n");
    fprintf(stdout, "%s\n", pcap_lib_version());
 }
@@ -2001,12 +1839,12 @@ arp_scan_version (void) {
  *
  *	name		The name to lookup
  *	af		The address family
- *	addr		Pointer to the IP address buffer
+ *	addr		Puntero to the IP address buffer
  *	error_msg	The error message, or NULL if no problem.
  *
  *	Returns:
  *
- *	Pointer to the IP address, or NULL if an error occurred.
+ *	Puntero to the IP address, or NULL if an error occurred.
  *
  *	This function is basically a wrapper for getaddrinfo().
  */
@@ -2056,7 +1894,7 @@ get_host_address(const char *name, int af, struct in_addr *addr,
  *
  *	Returns:
  *
- *	Pointer to the string representation of the IP address.
+ *	Puntero to the string representation of the IP address.
  *
  *	This currently only supports IPv4.
  */
@@ -2075,7 +1913,7 @@ my_ntoa(struct in_addr addr) {
  *
  *	Inputs:
  *
- *	buffer		Pointer to the output buffer
+ *	buffer		Puntero to the output buffer
  *	frame_hdr	The Ethernet frame header
  *	arp_pkt		The ARP packet
  *	buf_siz		The size of the output buffer
@@ -2185,28 +2023,27 @@ marshal_arp_pkt(unsigned char *buffer, ether_hdr *frame_hdr,
 }
 
 /*
- *	unmarshal_arp_pkt -- Un Marshal ARP packet from buffer to struct
+ *	unmarshal_arp_pkt -- Un paquete Marshall ARP de buffer a struct
  *
  *	Inputs:
  *
- *	buffer		Pointer to the input buffer
- *	buf_len		Length of input buffer
- *	frame_hdr	The ethernet frame header
- *	arp_pkt		The arp packet data
- *	extra_data	Any extra data after the ARP data (typically padding)
- *	extra_data_len	Length of extra data
- *	vlan_id		802.1Q VLAN identifier
+ *	buffer		Puntero al buffer de entrada
+ *	buf_len		Tamaño del buffer de entrada
+ *	frame_hdr	Cabecera de la trama ethernet
+ *	arp_pkt		Los datos del paquete arp
+ *	extra_data	Algun dato extra despues de los datos arp (normalmente relleno)
+ *	extra_data_len	Tamaño de los datos extra
+ *	vlan_id		802.1Q VLAN identificador
  *
- *	Returns:
+ *	Devuelve:
  *
- *	An integer representing the data link framing:
+ *	Un entero que representa la estructura de enlace de datos:
  *	0 = Ethernet-II
  *	1 = 802.3 with LLC/SNAP
  *
- *	extra_data and extra_data_len are only calculated and returned if
- *	extra_data is not NULL.
- *
- *	vlan_id is set to -1 if the packet does not use 802.1Q tagging.
+ *      extra_data y extra_data_len solo se calculan y devuelven si
+ *      extra_data no es NULL.
+ *	vlan_id se establece en -1 si el paquete no utiliza el etiquetado 802.1Q.
  */
 int
 unmarshal_arp_pkt(const unsigned char *buffer, size_t buf_len,

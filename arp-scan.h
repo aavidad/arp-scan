@@ -214,7 +214,7 @@ void err_print(int, const char *, va_list);
 void usage(int, int);
 void add_host_pattern(const char *, unsigned);
 void add_host(const char *, unsigned, int);
-int send_packet(pcap_t *, host_entry *, struct timeval *);
+int send_packet(pcap_t *, host_entry *, struct timeval *,int);
 void recvfrom_wto(int, int, pcap_t *);
 void remove_host(host_entry **);
 void timeval_diff(const struct timeval *, const struct timeval *,
