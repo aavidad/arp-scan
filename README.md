@@ -1,5 +1,9 @@
-# modificacion del paquete arp-scan
-# Se ha añadido la opcion G <i> o --grx=<i>, donde <i> es un entero entre 1 y 255
+[![Build Status](https://secure.travis-ci.org/royhills/arp-scan.png)](http://travis-ci.org/royhills/arp-scan)
+[![Coverage Status](https://coveralls.io/repos/royhills/arp-scan/badge.png?branch=master)](https://coveralls.io/r/royhills/arp-scan?branch=master)
+
+
+# Modificacion del paquete arp-scan
+# Se ha añadido la opcion G i o --grx=i, donde i es un entero entre 1 y 255
 # Cuando usamos arp-scan para buscar un listado de host, tenemos la opcion de asignar ip_source = ip_dest
 # con -arpspa=dest, pero en los router de la Diputacion de Granada no funciona esta opcion.
 # Esta opcion implementada toma el valor de una ip_dest y crea un ip_source con la terminacion <i>.
@@ -10,9 +14,6 @@
 # buscando en 180 subredes
 
 # arp-scan
-
-[![Build Status](https://secure.travis-ci.org/royhills/arp-scan.png)](http://travis-ci.org/royhills/arp-scan)
-[![Coverage Status](https://coveralls.io/repos/royhills/arp-scan/badge.png?branch=master)](https://coveralls.io/r/royhills/arp-scan?branch=master)
 
 The ARP scanner
 
